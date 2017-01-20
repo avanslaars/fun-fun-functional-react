@@ -1,5 +1,23 @@
 import React, {Component} from 'react'
+import {invoker, compose, zipObj, values, append, tap, pick, path, objOf} from 'ramda'
 import 'isomorphic-fetch'
+
+// This could come from env variable, config file, etc
+const GET_DECK_URL = `https://deckofcardsapi.com/api/deck/new/shuffle/?deck_count=1`
+
+const log = tap(console.log)
+
+const then = invoker(1, 'then')
+const json = then(invoker(0, 'json'))
+const getJson = compose(json, fetch)
+
+// Handle loading initial state with fecth and converting into a usable object
+// I named state properties different from response properties to make sure this was a covered case
+const responseToState = then(compose(zipObj(['deckid', 'remaining', 'isLoading']), append(false), values, pick(['deck_id', 'remaining'])))
+const loadInitialState = compose(responseToState, getJson)
+
+// Deal with input
+const getNewDrawCount = compose(objOf('drawCount'), path(['target', 'value']))
 
 export default class extends Component {
   state = {
@@ -11,21 +29,23 @@ export default class extends Component {
     discardPile: []
   }
 
-  componentDidMount() {
-    fetch(`https://deckofcardsapi.com/api/deck/new/shuffle/?deck_count=1`)
-      .then(res => res.json())
-      // Setting multiple state values from a single source object & a static value - no event
-      .then(res => this.setState({deckid: res.deck_id, remaining:res.remaining, isLoading: false}))
+
+  // Use composition to get object and pass it to this.setState directly
+  async componentDidMount() {
+    const res = await loadInitialState(GET_DECK_URL)
+    this.setState(res)
   }
 
   // Setting state from typical event - basically boilerplate for normal inputs
-  changeDrawCount = (evt) => this.setState({drawCount:evt.target.value})
+  changeDrawCount = (evt) => {
+      const newState = getNewDrawCount(evt)
+      this.setState(newState)
+  }
 
-  drawCards = (evt) => {
-    fetch(`https://deckofcardsapi.com/api/deck/${this.state.deckid}/draw/?count=${this.state.drawCount}`)
-      .then(res => res.json())
-      // using the function version of setState to reference previous state (and props if needed with 2nd arg)
-      .then(res => this.setState((prevState) => ({cards: res.cards, remaining: res.remaining, discardPile: prevState.discardPile.concat(prevState.cards), drawCount: 1})))
+  drawCards = async (evt) => {
+    const res = await getJson(`https://deckofcardsapi.com/api/deck/${this.state.deckid}/draw/?count=${this.state.drawCount}`)
+    // using the function version of setState to reference previous state (and props if needed with 2nd arg)
+    this.setState((prevState) => ({cards: res.cards, remaining: res.remaining, discardPile: prevState.discardPile.concat(prevState.cards), drawCount: 1}))
   }
 
   discard = (code) => {
