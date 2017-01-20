@@ -12,7 +12,7 @@ export default class extends Component {
 
   componentDidMount() {
     fetch(`https://deckofcardsapi.com/api/deck/new/shuffle/?deck_count=1`)
-      .then(json)
+      .then(res => res.json())
       // Setting multiple state values from a single source object - no event
       .then(res => this.setState({deckid: res.deck_id, remaining:res.remaining}))
   }
