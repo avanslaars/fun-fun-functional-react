@@ -1,6 +1,9 @@
 import React, {Component} from 'react'
-import {invoker, compose, zipObj, values, append, tap, pick, path, objOf} from 'ramda'
+import {invoker, compose, zipObj, values, append, tap, pick, path, objOf, propEq, findIndex, flip, remove, useWith, identity} from 'ramda'
 import 'isomorphic-fetch'
+
+const removeF = flip(remove)
+const removeOne = removeF(1)
 
 // This could come from env variable, config file, etc
 const GET_DECK_URL = `https://deckofcardsapi.com/api/deck/new/shuffle/?deck_count=1`
@@ -16,15 +19,16 @@ const getJson = compose(json, fetch)
 const responseToState = then(compose(zipObj(['deckid', 'remaining', 'isLoading']), append(false), values, pick(['deck_id', 'remaining'])))
 const loadInitialState = compose(responseToState, getJson)
 
-// Deal with input
+// Deal with input - generic verison of this is basically `linkState`
 const getNewDrawCount = compose(objOf('drawCount'), path(['target', 'value']))
+const findIndexByCode = useWith(findIndex, [propEq('code'), identity])
 
 export default class extends Component {
   state = {
     isLoading: true,
     deckid:'',
     remaining:0,
-    drawCount:1,
+    drawCount:5,
     cards: [],
     discardPile: []
   }
@@ -49,14 +53,14 @@ export default class extends Component {
   }
 
   discard = (code) => {
-      const cardIndex = this.state.cards.findIndex(x => x.code === code)
-      // Update cards
-      const newCards = [...this.state.cards.slice(0, cardIndex), ...this.state.cards.slice(cardIndex+1)]
+    const cardIndex = findIndexByCode(code, this.state.cards)
+    // Update cards
+    const newCards = removeOne(cardIndex, this.state.cards)
 
-      // Update discard pile
-      const newDiscardPile = this.state.discardPile.concat(this.state.cards[cardIndex])
+    // Update discard pile
+    const newDiscardPile = this.state.discardPile.concat(this.state.cards[cardIndex])
 
-      this.setState({cards: newCards, discardPile: newDiscardPile})
+    this.setState({cards: newCards, discardPile: newDiscardPile})
 
   }
 
