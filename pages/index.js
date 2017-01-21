@@ -1,26 +1,32 @@
 import React, {Component} from 'react'
-import {invoker, compose, zipObj, values, append, tap, pick, path, objOf, propEq, findIndex, flip, remove, useWith, identity} from 'ramda'
 import 'isomorphic-fetch'
-
-const removeF = flip(remove)
-const removeOne = removeF(1)
-
-// This could come from env variable, config file, etc
-const GET_DECK_URL = `https://deckofcardsapi.com/api/deck/new/shuffle/?deck_count=1`
-
-const log = tap(console.log)
+import {invoker, compose, zipObj, values, append,
+    tap, pick, path, objOf, propEq, findIndex, flip,
+    remove, useWith, identity, apply} from 'ramda'
 
 const then = invoker(1, 'then')
 const json = then(invoker(0, 'json'))
 const getJson = compose(json, fetch)
 
-// Handle loading initial state with fecth and converting into a usable object
-// I named state properties different from response properties to make sure this was a covered case
+// This could come from env variable, config file, etc
+const GET_DECK_URL = `https://deckofcardsapi.com/api/deck/new/shuffle/?deck_count=1`
+const getDrawUrl = (id, count) => `https://deckofcardsapi.com/api/deck/${id}/draw/?count=${count}`
+const fetchCards = compose(getJson, getDrawUrl)
+const getCards = compose(apply(fetchCards), values, pick(['deckid', 'drawCount']))
+
+const log = tap(console.log)
+
+const removeF = flip(remove)
+const removeOne = removeF(1)
+
+// Handle loading initial state with fetch and converting into a usable object
+// I named state properties different than response properties to make sure this was a covered case
 const responseToState = then(compose(zipObj(['deckid', 'remaining', 'isLoading']), append(false), values, pick(['deck_id', 'remaining'])))
 const loadInitialState = compose(responseToState, getJson)
 
 // Deal with input - generic verison of this is basically `linkState`
 const getNewDrawCount = compose(objOf('drawCount'), path(['target', 'value']))
+
 const findIndexByCode = useWith(findIndex, [propEq('code'), identity])
 
 export default class extends Component {
@@ -33,7 +39,6 @@ export default class extends Component {
     discardPile: []
   }
 
-
   // Use composition to get object and pass it to this.setState directly
   async componentDidMount() {
     const res = await loadInitialState(GET_DECK_URL)
@@ -42,12 +47,12 @@ export default class extends Component {
 
   // Setting state from typical event - basically boilerplate for normal inputs
   changeDrawCount = (evt) => {
-      const newState = getNewDrawCount(evt)
-      this.setState(newState)
+    const newState = getNewDrawCount(evt)
+    this.setState(newState)
   }
 
-  drawCards = async (evt) => {
-    const res = await getJson(`https://deckofcardsapi.com/api/deck/${this.state.deckid}/draw/?count=${this.state.drawCount}`)
+  drawCards = async () => {
+    const res = await getCards(this.state)
     // using the function version of setState to reference previous state (and props if needed with 2nd arg)
     this.setState((prevState) => ({cards: res.cards, remaining: res.remaining, discardPile: prevState.discardPile.concat(prevState.cards), drawCount: 1}))
   }
