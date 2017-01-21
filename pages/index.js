@@ -2,7 +2,8 @@ import React, {Component} from 'react'
 import 'isomorphic-fetch'
 import {invoker, compose, zipObj, values, append,
     tap, pick, path, objOf, propEq, findIndex, flip,
-    remove, useWith, identity, apply} from 'ramda'
+    remove, useWith, identity, apply, curryN, partition,
+    converge, concat, evolve, uncurryN} from 'ramda'
 
 const then = invoker(1, 'then')
 const json = then(invoker(0, 'json'))
@@ -54,18 +55,24 @@ export default class extends Component {
   drawCards = async () => {
     const res = await getCards(this.state)
     // using the function version of setState to reference previous state (and props if needed with 2nd arg)
-    this.setState((prevState) => ({cards: res.cards, remaining: res.remaining, discardPile: prevState.discardPile.concat(prevState.cards), drawCount: 1}))
+    // TODO: find a more functional way...
+    const handle = (prevState) => ({
+        cards: res.cards,
+        remaining: res.remaining,
+        discardPile: prevState.discardPile.concat(prevState.cards),
+        drawCount: 5
+      })
+    this.setState(handle)
   }
 
   discard = (code) => {
-    const cardIndex = findIndexByCode(code, this.state.cards)
-    // Update cards
-    const newCards = removeOne(cardIndex, this.state.cards)
+    // TODO: get this down to just passing in this.state and code?
+    const createPartition = useWith(curryN(2, compose(zipObj(['discardPile', 'cards']),partition)), [propEq('code')])
+    const createEvolve = useWith(evolve, [compose(objOf('discardPile'), concat)])
+    const createNewState = uncurryN(3, useWith(compose, [createEvolve, createPartition]))
+    const newState = createNewState(this.state.discardPile, code, this.state.cards)
 
-    // Update discard pile
-    const newDiscardPile = this.state.discardPile.concat(this.state.cards[cardIndex])
-
-    this.setState({cards: newCards, discardPile: newDiscardPile})
+    this.setState(newState)
 
   }
 
