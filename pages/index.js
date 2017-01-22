@@ -5,12 +5,14 @@ import {invoker, compose, zipObj, values, append,
     remove, useWith, identity, apply, curryN, partition,
     converge, concat, evolve, uncurryN} from 'ramda'
 
+// This could come from env variable, config file, etc
+const GET_DECK_URL = `https://deckofcardsapi.com/api/deck/new/shuffle/?deck_count=1`
+const DEFAULT_DRAW_COUNT = 5
+
 const then = invoker(1, 'then')
 const json = then(invoker(0, 'json'))
 const getJson = compose(json, fetch)
 
-// This could come from env variable, config file, etc
-const GET_DECK_URL = `https://deckofcardsapi.com/api/deck/new/shuffle/?deck_count=1`
 const getDrawUrl = (id, count) => `https://deckofcardsapi.com/api/deck/${id}/draw/?count=${count}`
 const fetchCards = compose(getJson, getDrawUrl)
 const getCards = compose(apply(fetchCards), values, pick(['deckid', 'drawCount']))
@@ -19,6 +21,7 @@ const log = tap(console.log)
 
 const removeF = flip(remove)
 const removeOne = removeF(1)
+
 
 // Handle loading initial state with fetch and converting into a usable object
 // I named state properties different than response properties to make sure this was a covered case
@@ -30,12 +33,21 @@ const getNewDrawCount = compose(objOf('drawCount'), path(['target', 'value']))
 
 const findIndexByCode = useWith(findIndex, [propEq('code'), identity])
 
+const handleDraw = res => (prevState, props) => ({
+    cards: res.cards,
+    remaining: res.remaining,
+    discardPile: prevState.discardPile.concat(prevState.cards),
+    drawCount: DEFAULT_DRAW_COUNT
+  })
+
+const handleCardDraw = compose(then(handleDraw), getCards)
+
 export default class extends Component {
   state = {
     isLoading: true,
     deckid:'',
     remaining:0,
-    drawCount:5,
+    drawCount:DEFAULT_DRAW_COUNT,
     cards: [],
     discardPile: []
   }
@@ -53,16 +65,9 @@ export default class extends Component {
   }
 
   drawCards = async () => {
-    const res = await getCards(this.state)
+    const handler = await handleCardDraw(this.state)
     // using the function version of setState to reference previous state (and props if needed with 2nd arg)
-    // TODO: find a more functional way...
-    const handle = (prevState) => ({
-        cards: res.cards,
-        remaining: res.remaining,
-        discardPile: prevState.discardPile.concat(prevState.cards),
-        drawCount: 5
-      })
-    this.setState(handle)
+    this.setState(handler)
   }
 
   discard = (code) => {
